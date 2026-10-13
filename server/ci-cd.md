@@ -49,7 +49,7 @@ bude v `main` po merge.
 | --- | --- | --- |
 | Config check | `make check` | overí `compose.yml` pre všetky profily a konfiguráciu Promethea |
 | Build services | `make images` | naklonuje `main` každej služby a postaví jej obraz; repozitáre bez `Dockerfile` preskočí; commity zapíše do popisu buildu |
-| Network tests | `make test` | z týchto obrazov spustí testovaciu kópiu siete a pustí `e2e/smoke.sh` |
+| Network tests | `make test` | z týchto obrazov spustí testovaciu kópiu siete, pustí `e2e/smoke.sh` a potom `e2e/run.sh` každej služby |
 | Deploy to staging | `scripts/staging-deploy.sh` | iba večerný build `main`, pozri nižšie |
 
 Potom v bloku `post`:
@@ -70,6 +70,49 @@ stagingu, ich dáta ani heslá v `/run/pouw-secrets`. Prečo, je v
 Naraz môžu bežať dva buildy (2 executory). Každý má vlastný compose projekt
 (`pouw-test-<executor>`) a tag obrazov (`ci-<executor>`). Testovacia kópia
 nemá porty na hostiteľovi (`compose.test.yml`), takže sa buildy nebijú.
+
+## E2E testy služieb
+
+Unit testy patria do `tests/` v repozitári služby a bežia v GitHub Actions
+(`ci-ok`). Testy, ktoré potrebujú bežiacu sieť (API, SOAP, spolupráca uzla a
+indexera), patria do priečinka `e2e/` v repozitári služby. Spúšťa ich Jenkins
+v stage Network tests, teda pri každom PR v `pouw-deploy` a večer pred
+nasadením na staging.
+
+Bežia na testovacej kópii siete, nie na stagingu. Kópia vznikne z toho istého
+`compose.yml` a z tých istých verzií služieb, ktoré sa potom nasadia. Keď test
+zlyhá, nasadenie sa zastaví, a testy nemenia dáta stagingu.
+
+Každá služba má v `e2e/` rovnaké súbory:
+
+| Súbor | Načo |
+| --- | --- |
+| `run.sh` | vstupný bod, ktorý volá `make test` |
+| `test_*.py` | samotné testy (`pytest`) |
+| `requirements.txt` | knižnice pre testy |
+| `conftest.py` | bez bežiacej siete (napríklad `pytest` v `ci-ok`) priečinok preskočí |
+
+Dohoda medzi `run.sh` a `pouw-deploy`:
+
+- argument je názov compose projektu bežiacej siete;
+- výsledky zapíše ako JUnit XML do `$JUNIT_DIR`, Jenkins ich ukáže v Tests;
+- nenulový exit code znamená zlyhané testy, staging sa nenasadí.
+
+`run.sh` pustí `pytest` v kontajneri pripojenom do siete testovacej kópie.
+Služby sú dostupné podľa mena v `compose.yml` (`http://indexer:8000`), porty
+na hostiteľovi nie sú. Bez súborov `test_*.py` sa nič nespustí. Ak služba
+potrebuje iný nástroj ako `pytest`, stačí prepísať telo `run.sh` a dodržať
+dohodu.
+
+`make test` spustí testy služieb aj vtedy, keď niektoré predtým zlyhali, a
+zlyhá na konci. Testy sa berú z `main` služieb, ktoré naklonuje `make images`.
+Keď e2e test v PR služby zlyhá, ukáže sa to preto až vo večernom builde.
+Lokálne sa dajú pustiť testy z vlastných pracovných kópií vedľa `pouw-deploy`:
+
+```bash
+make images test IMAGE_TAG=local E2E_SRC=..
+make test-down
+```
 
 ## Večerný build a nasadenie na staging
 
@@ -119,6 +162,7 @@ nasadenie vráti predchádzajúci stav. Podrobnosti v
 | Čo je teraz nasadené na stagingu? | GitHub → Actions → Deploy → Run workflow → akcia `status` |
 | História nasadení a rollbackov | `deploy-history.log` v `~/pouw/pouw-deploy` na serveri |
 | Unit testy jednej služby | GitHub Actions daného repozitára, job `ci-ok` |
+| E2E testy služieb | Jenkins → build → **Tests**, sada podľa mena repozitára |
 
 ## E-maily
 
