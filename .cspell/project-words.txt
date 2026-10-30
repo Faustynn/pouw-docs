@@ -182,3 +182,7 @@ Metabase
 Polkadot
 serde
 Subsquid
+dashboardy
+healthcheck
+naklonované
+naklonovaný
