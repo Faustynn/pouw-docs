@@ -12,9 +12,9 @@ Ako sa kód dostane z pull requestu na staging a kde hľadať, keď niečo zlyh�
 
 | Kedy | Čo beží | Kde | Výsledok |
 | --- | --- | --- | --- |
-| PR alebo push v repozitári služby | `ci-ok`: lint, unit testy, audit závislostí, lint Dockerfile | GitHub Actions | povinné pre merge |
+| PR alebo push v repozitári služby | `ci-ok`: lint, unit a integračné testy, audit závislostí, lint Dockerfile, obraz sa postaví a naštartuje | GitHub Actions | povinné pre merge |
 | Push do `main` v repozitári služby | `docker.yml`: postaví obraz | GitHub Actions | `ghcr.io/pouw-zk/<repo>:main` a `:sha-<7>` |
-| PR alebo push v `pouw-deploy` | `ci-ok` (kontrola konfigurácie) a pipeline v Jenkinse | GitHub Actions, Jenkins | povinné pre merge |
+| PR alebo push v `pouw-deploy` | `ci-ok`: kontrola konfigurácie, skripty na Linuxe, macOS a Windows, celá sieť z `main` služieb so smoke testami; pipeline v Jenkinse | GitHub Actions, Jenkins | povinné pre merge |
 | Každý pondelok a pri každom PR | `security`: Trivy, actionlint | GitHub Actions | spoločný workflow organizácie |
 | Každý večer (okolo 21:00) | pipeline v Jenkinse od nuly, potom nasadenie | Jenkins, GitHub Actions | staging aktualizovaný alebo bez zmeny |
 

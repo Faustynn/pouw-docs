@@ -104,9 +104,14 @@ Testy celej siete sú v `e2e/smoke.sh`, jedna kontrola na riadok:
 check "<popis>" <služba> '<shell príkaz, ktorý beží v kontajneri služby>'
 ```
 
-Príkaz beží cez `docker compose exec`, takže nepotrebuje porty na hostiteľovi a
-funguje lokálne, v Jenkinse aj na stagingu. Každá kontrola je jeden test v
+Príkaz beží cez `docker exec` v kontajneri služby, takže nepotrebuje porty na
+hostiteľovi a funguje lokálne, v Jenkinse aj na stagingu. Kontrola služby z
+voliteľného profilu (`network`, `host-metrics`), ktorá nebeží, sa preskočí;
+služba bez profilu, ktorá nebeží, je chyba. Každá kontrola je jeden test v
 záložke **Tests** v Jenkinse. Večerné nasadenie prebehne, iba ak prejdú všetky.
+
+Ktorý druh testu kam patrí (unit, integračné, smoke, e2e) a ako ich Jenkins
+nájde, popisuje README repozitára `pouw-deploy`, časť *Tests*.
 
 Príklady testov, ktoré dávajú zmysel, keď budú služby hotové:
 

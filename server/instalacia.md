@@ -171,7 +171,7 @@ univerzitné heslo sem nevkladaj.
 ```bash
 cd ~/pouw/pouw-deploy
 cat > .env <<'EOF'
-COMPOSE_PROFILES=jenkins,proxy
+COMPOSE_PROFILES=jenkins,proxy,host-metrics
 SECRETS_SOURCE=pass
 SECRETS_DIR=/run/pouw-secrets
 
@@ -191,7 +191,7 @@ make ps      # všetko Up, jenkins/grafana/prometheus (healthy)
 
 | Premenná | Význam |
 | --- | --- |
-| `COMPOSE_PROFILES` | na serveri `jenkins,proxy`; bez profilu beží iba monitoring |
+| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží iba databáza, Hasura a monitoring |
 | `SECRETS_SOURCE`, `SECRETS_DIR` | heslá z `pass`, dešifrované do tmpfs |
 | `JENKINS_HOST`, `GRAFANA_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
 | `JENKINS_URL`, `GRAFANA_URL` | verejné adresy; lomka na konci je povinná |
