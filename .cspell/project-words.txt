@@ -182,6 +182,9 @@ Metabase
 Polkadot
 serde
 Subsquid
+maturin
+wasmtime
+precomputation
 dashboardy
 healthcheck
 naklonované
