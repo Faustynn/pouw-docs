@@ -21,7 +21,7 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 | Služba | Adresa na stagingu | Prihlásenie |
 | --- | --- | --- |
 | Jenkins | <https://jenkins.147-175-151-18.sslip.io> | GitHub účet, člen organizácie PoUW-ZK |
-| Grafana | <https://grafana.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/grafana/admin` na serveri |
+| Grafana | <https://grafana.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/grafana/admin` na serveri; dashboardy v priečinku PoUW |
 
 ## Ako to do seba zapadá
 

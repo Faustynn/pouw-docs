@@ -62,7 +62,7 @@ Všetky heslá sú v `secrets.list`. Prečo práve `pass`, je v
 
 | Druh | Kto ho vytvorí | Príklady |
 | --- | --- | --- |
-| `random` | `pass-init.sh` | admin Grafany, admin Jenkinsu, secret webhookov |
+| `random` | `pass-init.sh`, nové aj `secrets.sh` pri nasadení | admin Grafany, používateľ Grafany v databáze, admin Jenkinsu, secret webhookov |
 | `manual` | ty, `pass insert -m` | GitHub App, OAuth App, SMTP |
 | `ssh-key` | `secrets.sh` pri každom štarte, nie je v `pass` | kľúč Jenkins → agent |
 
@@ -81,8 +81,9 @@ Samotné `make up` nestačí: kontajner drží starý súbor, kým ho niekto zno
 nevytvorí.
 
 **Nové heslo**: riadok v `secrets.list` → položka v `secrets:` v `compose.yml`
-(na najvyššej úrovni aj pri službe) → `./scripts/pass-init.sh` (vygeneruje
-`random`) alebo `pass insert -m` (`manual`) → nasadenie.
+(na najvyššej úrovni aj pri službe) → nasadenie. Heslo druhu `random`, ktoré
+ešte nie je v `pass`, vygeneruje `secrets.sh` pri nasadení sám; heslo druhu
+`manual` treba vložiť cez `pass insert -m`.
 
 **Záloha úložiska.** Úložisko je git repozitár zašifrovaný pre kľúč servera a
 kľúče správcov. Skopíruj ho na bezpečné miesto, napríklad do súkromného
