@@ -60,7 +60,7 @@ make down        # zastaví všetko, dáta zostanú
 Návod na prvé použitie na Linuxe, macOS a Windows (WSL 2), bežnú prácu a
 písanie testov je v [README pouw-deploy](https://github.com/PoUW-ZK/pouw-deploy#readme).
 Bez vlastných zmien v službách stačí `make up`: služby sa stiahnu z GHCR
-(`:main`). Hasura beží na <http://localhost:8081>, Prometheus na
+(`:main`). Hasura (s profilom `network`) beží na <http://localhost:8081>, Prometheus na
 <http://localhost:9090>, Grafana na <http://localhost:3000> (heslo v
 `.secrets/grafana_admin_password`). Všetky príkazy vypíše `make help`.
 

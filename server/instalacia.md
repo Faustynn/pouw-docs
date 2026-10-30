@@ -191,7 +191,7 @@ make ps      # všetko Up, jenkins/grafana/prometheus (healthy)
 
 | Premenná | Význam |
 | --- | --- |
-| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží iba databáza, Hasura a monitoring |
+| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží iba databáza a monitoring; Hasura a služby siete pribudnú s profilom `network` |
 | `SECRETS_SOURCE`, `SECRETS_DIR` | heslá z `pass`, dešifrované do tmpfs |
 | `JENKINS_HOST`, `GRAFANA_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
 | `JENKINS_URL`, `GRAFANA_URL` | verejné adresy; lomka na konci je povinná |
