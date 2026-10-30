@@ -107,10 +107,11 @@ dohodu.
 `make test` spustí testy služieb aj vtedy, keď niektoré predtým zlyhali, a
 zlyhá na konci. Testy sa berú z `main` služieb, ktoré naklonuje `make images`.
 Keď e2e test v PR služby zlyhá, ukáže sa to preto až vo večernom builde.
-Lokálne sa dajú pustiť testy z vlastných pracovných kópií vedľa `pouw-deploy`:
+Lokálne sa dajú pustiť služby aj testy z vlastných pracovných kópií vedľa
+`pouw-deploy` (`make dev-test` = `make images test SRC=..`):
 
 ```bash
-make images test IMAGE_TAG=local E2E_SRC=..
+make dev-test
 make test-down
 ```
 

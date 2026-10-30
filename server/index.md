@@ -45,18 +45,22 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 
 ## Lokálne spustenie
 
-Potrebuješ Docker s Compose 2.24+, `make`, `openssl` a `ssh-keygen`:
+Potrebuješ Docker s Compose 2.24+, `make`, `openssl` a `ssh-keygen`.
+Repozitáre služieb majú byť naklonované vedľa `pouw-deploy` (napríklad cez
+`.github/scripts/sync-repos.sh`):
 
 ```bash
-git clone https://github.com/PoUW-ZK/pouw-deploy.git && cd pouw-deploy
+cd pouw-deploy
 cp .env.example .env
-make up          # Prometheus na http://localhost:9090, Grafana na http://localhost:3000
-make test        # testy siete v samostatnej kópii, výsledky v reports/smoke.xml
-make test-down
+make dev         # postaví všetky služby z ../pouw-* (aj s necommitnutými zmenami) a spustí celú sieť
+make dev-test    # tie isté obrazy, testy siete v samostatnej kópii, výsledky v reports/
+make down        # zastaví všetko, dáta zostanú
 ```
 
-Heslo do Grafany je v `.secrets/grafana_admin_password`. Všetky príkazy
-vypíše `make help`.
+Bez vlastných zmien v službách stačí `make up`: služby sa stiahnu z GHCR
+(`:main`). Hasura beží na <http://localhost:8081>, Prometheus na
+<http://localhost:9090>, Grafana na <http://localhost:3000> (heslo v
+`.secrets/grafana_admin_password`). Všetky príkazy vypíše `make help`.
 
 ## Základné pravidlá
 
