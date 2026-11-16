@@ -15,8 +15,8 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 
 | Prostredie | Kde | Čo tam beží |
 | --- | --- | --- |
-| Lokálne | notebook člena tímu | sieť, voliteľne Jenkins s lokálnym prihlásením |
-| Staging | server FIIT `pouw-dev` (147.175.151.18) | sieť, Jenkins, HTTPS proxy |
+| Lokálne | notebook člena tímu | sieť (devnet s 3 uzlami), voliteľne Jenkins s lokálnym prihlásením |
+| Staging | server FIIT `pouw-dev` (147.175.151.18) | sieť (devnet s 3 uzlami), monitoring s alertmi, nočné zálohy, Jenkins, HTTPS proxy |
 
 | Služba | Adresa na stagingu | Prihlásenie |
 | --- | --- | --- |

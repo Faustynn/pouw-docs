@@ -185,19 +185,45 @@ voliteľného profilu (`network`, `host-metrics`), ktorá nebeží, sa preskoč�
 služba bez profilu, ktorá nebeží, je chyba. Každá kontrola je jeden test v
 záložke **Tests** v Jenkinse. Večerné nasadenie prebehne, iba ak prejdú všetky.
 
+Smoke testy sa pýtajú iba „beží to a je to prepojené“. Správanie celého
+devnetu testuje `e2e/test_devnet.py` (pytest, výsledky v suite `devnet`):
+uzly majú spoločný genesis a vidia sa, `node-1` ťaží, indexer je menej ako
+5 blokov za uzlom, Hasura vracia najnovší blok uzla, subscription dostane nový
+blok a explorer odpovedá. Test, že všetky tri uzly majú rovnaký tip, je
+označený ako očakávané zlyhanie (`xfail`), kým uzly nevymieňajú bloky
+(pouw-node#86, #90). Keď prejde, značku zmaž.
+
 Ktorý druh testu kam patrí (unit, integračné, smoke, e2e) a ako ich Jenkins
 nájde, popisuje README repozitára `pouw-deploy`, časť *Tests*.
 
-Príklady testov, ktoré dávajú zmysel, keď budú služby hotové:
+Lokálne ich vyskúšaš cez `make dev-test` (postaví služby z tvojich pracovných
+kópií) alebo `make images test IMAGE_TAG=local` (z `main`), potom `make test-down`.
+Proti bežiacej sieti: `./e2e/smoke.sh pouw` a `./e2e/run.sh pouw`.
+
+## Devnet
+
+Sieť na stagingu aj v každej testovacej kópii je devnet s tromi uzlami
+`node-1`, `node-2` a `node-3`. Každý má vlastný zväzok (RocksDB a kľúč uzla).
+`node-1` je bootnode a jediný ťažiar, `node-2` a `node-3` sa naň pripoja
+(`NODE_BOOTNODES`) a cez neho nájdu aj seba navzájom. Indexer a generátor
+čítajú z `node-1`, Prometheus zbiera metriky všetkých troch.
+
+Genesis vytvorí služba `genesis` raz, keď je zväzok `devnet` prázdny: zo
+šablóny `devnet/chainspec.json` (kópia `pouw-node/chainspec/devnet.json`) s
+aktuálnym časom ako `genesis.timestamp`. Plán obtiažnosti sa počíta od tohto
+času, takže reťazec spustený dni po svojom genesis by najprv vyťažil nával
+ľahkých blokov.
+
+**Nový reťazec** (nový genesis, prázdne uzly aj databáza indexera):
 
 ```bash
-check "node produces blocks" node-1 '...'
-check "indexer sees the latest block" indexer '...'
-check "workload submits a task and gets a proof" workload '...'
+./scripts/devnet-reset.sh    # pýta sa, potom make up
 ```
 
-Lokálne ho vyskúšaš cez `make dev-test` (postaví služby z tvojich pracovných
-kópií) alebo `make images test IMAGE_TAG=local` (z `main`), potom `make test-down`.
+Treba ho po zmene `devnet/chainspec.json` (drž ju rovnakú ako v pouw-node) a
+raz po nasadení, ktoré mení genesis: uzol svoju databázu pod iným genesis
+odmietne a indexer prestane synchronizovať reťazec, s ktorým nemá spoločný ani
+genesis. `make seed` do databázy s devnetom nikdy nepúšťaj, z rovnakého dôvodu.
 
 ## Nová služba
 
@@ -276,4 +302,6 @@ docker compose exec jenkins-docker docker system prune -af
 | Lokálny Jenkins: `No rule to make target 'check'` | job vytvorený v UI s vloženým skriptom nemá checkout | používaj job `pouw-deploy` z CasC, job z UI zmaž |
 | Lokálny Jenkins sa nedostane na GitHub | pokazená sieť Docker Desktop | reštartuj Docker Desktop; `docker run --rm curlimages/curl -sI https://github.com` |
 | `make test`: `port is already allocated` | nová služba publikuje port na hostiteľovi | pridaj ju do `compose.test.yml` s `ports: !reset []` |
+| Uzol sa nenaštartuje (exit 1 alebo 2), v logu iný genesis | databáza uzla alebo `devnet/chainspec.json` patrí k inému genesis | `./scripts/devnet-reset.sh`; po zmene šablóny skontroluj, či sa zhoduje s `pouw-node/chainspec/devnet.json` |
+| Indexer: `the node's chain shares no block with the database, not even the genesis` | devnet dostal nový genesis alebo niekto spustil `make seed` | `./scripts/devnet-reset.sh` |
 | `make dev`: `no ../pouw-xxx, skipped`, potom `pull access denied` | repozitár služby nie je naklonovaný vedľa `pouw-deploy` | `.github/scripts/sync-repos.sh` |
