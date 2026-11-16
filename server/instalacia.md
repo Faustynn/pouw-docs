@@ -177,6 +177,7 @@ SECRETS_DIR=/run/pouw-secrets
 
 JENKINS_HOST=jenkins.147-175-151-18.sslip.io
 GRAFANA_HOST=grafana.147-175-151-18.sslip.io
+EXPLORER_HOST=explorer.147-175-151-18.sslip.io
 JENKINS_URL=https://jenkins.147-175-151-18.sslip.io/
 GRAFANA_URL=https://grafana.147-175-151-18.sslip.io/
 ACME_EMAIL=xmeredov@stuba.sk
@@ -191,9 +192,9 @@ make ps      # všetko Up, jenkins/grafana/prometheus (healthy)
 
 | Premenná | Význam |
 | --- | --- |
-| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží iba databáza a monitoring; Hasura a služby siete pribudnú s profilom `network` |
+| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží celá sieť (databáza, Hasura, uzol, indexer, generátor, explorer) a monitoring; profil `network` je pre službu, ktorá ešte nemá obraz v GHCR |
 | `SECRETS_SOURCE`, `SECRETS_DIR` | heslá z `pass`, dešifrované do tmpfs |
-| `JENKINS_HOST`, `GRAFANA_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
+| `JENKINS_HOST`, `GRAFANA_HOST`, `EXPLORER_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
 | `JENKINS_URL`, `GRAFANA_URL` | verejné adresy; lomka na konci je povinná |
 | `ACME_EMAIL` | účet Let's Encrypt, upozornenia na expirujúce certifikáty |
 | `JENKINS_AUTH` | na serveri `github`, na notebooku `local` (predvolené) |

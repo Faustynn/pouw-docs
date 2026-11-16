@@ -21,7 +21,8 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 | Služba | Adresa na stagingu | Prihlásenie |
 | --- | --- | --- |
 | Jenkins | <https://jenkins.147-175-151-18.sslip.io> | GitHub účet, člen organizácie PoUW-ZK |
-| Grafana | <https://grafana.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/grafana/admin` na serveri; dashboardy v priečinku PoUW |
+| Grafana | <https://grafana.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/grafana/admin` na serveri; dashboardy v priečinku PoUW; bez prihlásenia iba organizácia Public s vloženými panelmi |
+| Explorer | <https://explorer.147-175-151-18.sslip.io> | bez prihlásenia; GraphQL na `/v1/graphql`, iba na čítanie |
 
 ## Ako to do seba zapadá
 
@@ -60,8 +61,9 @@ make down        # zastaví všetko, dáta zostanú
 Návod na prvé použitie na Linuxe, macOS a Windows (WSL 2), bežnú prácu a
 písanie testov je v [README pouw-deploy](https://github.com/PoUW-ZK/pouw-deploy#readme).
 Bez vlastných zmien v službách stačí `make up`: služby sa stiahnu z GHCR
-(`:main`). Hasura (s profilom `network`) beží na <http://localhost:8081>, Prometheus na
-<http://localhost:9090>, Grafana na <http://localhost:3000> (heslo v
+(`:main`). Explorer beží na <http://localhost:8082>, Hasura na
+<http://localhost:8081>, Prometheus na <http://localhost:9090>, Grafana na
+<http://localhost:3000> (heslo v
 `.secrets/grafana_admin_password`). Všetky príkazy vypíše `make help`.
 
 ## Základné pravidlá
