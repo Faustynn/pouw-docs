@@ -198,3 +198,10 @@ dashboardy
 healthcheck
 naklonované
 naklonovaný
+zlyhaný
+alerty
+Alertmanageri
+Hasury
+Hasuru
+dumpu
+dumpe

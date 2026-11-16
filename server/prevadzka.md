@@ -12,14 +12,88 @@ spúšťaj ako `ubuntu` v `~/pouw/pouw-deploy`.
 ## Stav a logy
 
 ```bash
-make ps                     # kontajnery a ich zdravie
-make logs s=jenkins         # logy jednej služby: jenkins, proxy, grafana, prometheus, ...
-tail deploy-history.log     # nasadenia a automatické rollbacky
-cat versions.env            # verzie služieb z posledného nasadenia
+make ps                              # kontajnery a ich zdravie
+make logs SERVICE=jenkins            # logy jednej služby: jenkins, proxy, grafana, indexer, ...
+make logs SERVICE=indexer SINCE=1h   # iba posledná hodina
+tail deploy-history.log              # nasadenia a automatické rollbacky
+cat versions.env                     # verzie služieb z posledného nasadenia
 systemctl status pouw-secrets
 ```
 
 Bez SSH prístupu: GitHub → Actions → **Deploy** → akcia `status`.
+
+Docker drží z každého kontajnera najviac 3 súbory logov po 10 MB a najstarší
+maže (`x-logging` v `compose.yml`), takže logy disk nezaplnia. Staršie záznamy
+sa tým strácajú; čo treba uchovať, patrí do metrík alebo do databázy.
+
+## Alerty
+
+Prometheus vyhodnocuje pravidlá v `monitoring/prometheus/rules/` a Alertmanager
+posiela alerty e-mailom na `ALERT_EMAIL` cez ten istý SMTP účet ako Jenkins
+(časť SMTP v [inštalácii](instalacia.md)). Jeden e-mail na alert 30 s po
+začiatku, pripomienka každých 12 hodín, kým trvá, a jeden, keď sa vyrieši.
+Alertmanager je na serveri na `127.0.0.1:9093` (cez SSH tunel).
+
+| Alert | Kedy | Čo robiť |
+| --- | --- | --- |
+| `NodeDown` | Prometheus sa 2 minúty nedostane na uzol | `make logs SERVICE=node-1`; ak nepomôže, Actions → Deploy → `restart` |
+| `ServiceDown` | to isté pre indexer alebo generátor | `make logs SERVICE=indexer` (alebo `workload`) |
+| `ChainStalled` | výška žiadneho uzla sa 10 minút nezmenila | uzol neťaží alebo stojí: `make logs SERVICE=node-1`, Grafana → PoUW · Network |
+| `IndexerLagging` | indexer je 5 minút viac ako 10 blokov za uzlom | `make logs SERVICE=indexer`; po reštarte chvíľu dobieha, to je v poriadku |
+| `DiskAlmostFull` | disk servera je 10 minút plný na viac ako 80 % | `docker system df`, cache buildov: `docker compose exec jenkins-docker docker system prune -af` |
+| `ContainerRestarting` | kontajner sa za 15 minút reštartoval viac ako dvakrát | `make logs SERVICE=<kontajner bez pouw- a -1>`; pri `backup` zlyháva záloha |
+
+```bash
+make test-alert    # skúšobný alert celou cestou až po e-mail
+# stíšenie počas plánovanej práce
+docker compose exec alertmanager amtool silence add alertname=NodeDown \
+  --duration=2h --comment="výmena uzla" --alertmanager.url=http://localhost:9093
+```
+
+Nové pravidlo: `monitoring/prometheus/rules/pouw.yml` a k nemu test v
+`monitoring/prometheus/tests/` (prípad, keď alert príde, aj keď nie). `make
+check` testy spustí, Prometheus pravidlá načíta pri každom `make up`.
+
+## Zálohy a obnova
+
+Služba `backup` každú noc o 02:00 UTC uloží dump databázy indexera do
+`~/pouw/pouw-deploy/backups/` (`BACKUP_DIR`), mimo zväzkov Dockeru, a zmaže
+dumpy staršie ako 7 dní. Ak je najnovší starší ako 20 hodín, urobí jeden hneď
+po štarte. Keď dump zlyhá, kontajner skončí, Docker ho dookola reštartuje a
+príde alert `ContainerRestarting`. V databáze sú aj metadata Hasury. Grafana,
+Prometheus ani Jenkins sa nezálohujú: dashboardy a konfigurácia sú v gite,
+metriky sú dočasné.
+
+```bash
+ls -lt backups/        # dumpy, najnovší prvý
+make backup            # dump hneď, napríklad pred rizikovou zmenou
+make restore-test      # skúšobná obnova najnovšieho dumpu
+```
+
+**Skúšobná obnova** (`make restore-test`, iný dump cez `DUMP=pouw-<čas>.dump`)
+obnoví dump do novej databázy `pouw_restore` vedľa živej, vypíše tabuľky s
+počtom riadkov v oboch, overí, že sedia tabuľky, a `pouw_restore` zmaže. Živú
+databázu nemení, spustiť sa dá kedykoľvek. To isté robí každý `make test`, takže
+večerný build spadne, keď sa záloha nedá obnoviť.
+
+**Obnova živej databázy**, napríklad po poškodení zväzku `postgres-data`:
+
+1. Ak zväzok zmizol celý, `make up` najprv vytvorí prázdnu databázu.
+2. Vyber dump: `ls -lt backups/`.
+3. `./scripts/restore.sh --replace pouw-<čas>.dump` a potvrď `yes`. Skript
+   zastaví indexer a Hasuru, zmaže databázu `pouw`, obnoví ju z dumpu (celú
+   alebo nič) a služby znova spustí.
+4. `make ps`: `indexer` a `hasura` sú `(healthy)`. Indexer pokračuje od
+   posledného bloku v dumpe a novšie si stiahne z uzla.
+
+Bez zálohy vie indexer databázu naplniť z uzla aj sám, len to trvá dlhšie:
+
+```bash
+docker compose stop indexer hasura
+docker compose exec postgres dropdb -U pouw --force pouw
+docker compose exec postgres createdb -U pouw pouw
+make up
+```
 
 ## Nasadenie a rollback
 
@@ -187,11 +261,11 @@ docker compose exec jenkins-docker docker system prune -af
 | Príznak | Príčina | Riešenie |
 | --- | --- | --- |
 | `make up`: `Missing in pass: pouw/smtp/...` | SMTP nie je nastavené | v poriadku, ak je to zámer; pozri časť SMTP v [inštalácii](instalacia.md) |
-| Jenkins nenabehne, v `make logs s=jenkins` je `ConfiguratorException` | chybná hodnota v `jenkins/casc` alebo v hesle | oprav YAML alebo heslo; `pass show pouw/github/app-key \| head -1` musí byť `-----BEGIN PRIVATE KEY-----` |
+| Jenkins nenabehne, v `make logs SERVICE=jenkins` je `ConfiguratorException` | chybná hodnota v `jenkins/casc` alebo v hesle | oprav YAML alebo heslo; `pass show pouw/github/app-key \| head -1` musí byť `-----BEGIN PRIVATE KEY-----` |
 | Prihlásenie cez GitHub sa zacyklí alebo zlyhá | callback URL v OAuth App nesedí s `JENKINS_URL` | callback musí byť `https://<host>/securityRealm/finishLogin` |
 | Priečinok PoUW-ZK je prázdny | GitHub App nie je nainštalovaná alebo nemá práva | Install App → All repositories; priečinok → Scan Organization Now |
 | PR nespúšťajú buildy | zlá URL alebo secret webhooku | GitHub App → Advanced → Recent Deliveries ukáže chybu |
-| Bez certifikátu, prehliadač hlási chybu TLS | zatvorené porty 80/443 alebo DNS neukazuje na server | `make logs s=proxy`, zvonka `nc -vz <ip> 443` |
+| Bez certifikátu, prehliadač hlási chybu TLS | zatvorené porty 80/443 alebo DNS neukazuje na server | `make logs SERVICE=proxy`, zvonka `nc -vz <ip> 443` |
 | Večerné nasadenie: `Deploy workflow run not found` | GitHub App nemá Actions: Read and write | nastavenia aplikácie → Permissions, potom potvrď zmenu v inštalácii |
 | Beh Deploy čaká (`Waiting for a runner`) | runner na serveri nebeží | `sudo systemctl status 'actions.runner.*'` na serveri; znova `sudo ./scripts/runner-setup.sh <token>` |
 | Beh Deploy zlyhá na SSH | zlé hodnoty `DEPLOY_*` (host je `127.0.0.1`) alebo chýba riadok v `authorized_keys` | pozri časť 7 v [inštalácii](instalacia.md) |
