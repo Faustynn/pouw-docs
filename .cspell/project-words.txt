@@ -198,3 +198,8 @@ dashboardy
 healthcheck
 naklonované
 naklonovaný
+demom
+dema
+Grafane
+alerty
+devnetu
