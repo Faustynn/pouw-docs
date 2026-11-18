@@ -12,14 +12,88 @@ spúšťaj ako `ubuntu` v `~/pouw/pouw-deploy`.
 ## Stav a logy
 
 ```bash
-make ps                     # kontajnery a ich zdravie
-make logs s=jenkins         # logy jednej služby: jenkins, proxy, grafana, prometheus, ...
-tail deploy-history.log     # nasadenia a automatické rollbacky
-cat versions.env            # verzie služieb z posledného nasadenia
+make ps                              # kontajnery a ich zdravie
+make logs SERVICE=jenkins            # logy jednej služby: jenkins, proxy, grafana, indexer, ...
+make logs SERVICE=indexer SINCE=1h   # iba posledná hodina
+tail deploy-history.log              # nasadenia a automatické rollbacky
+cat versions.env                     # verzie služieb z posledného nasadenia
 systemctl status pouw-secrets
 ```
 
 Bez SSH prístupu: GitHub → Actions → **Deploy** → akcia `status`.
+
+Docker drží z každého kontajnera najviac 3 súbory logov po 10 MB a najstarší
+maže (`x-logging` v `compose.yml`), takže logy disk nezaplnia. Staršie záznamy
+sa tým strácajú; čo treba uchovať, patrí do metrík alebo do databázy.
+
+## Alerty
+
+Prometheus vyhodnocuje pravidlá v `monitoring/prometheus/rules/` a Alertmanager
+posiela alerty e-mailom na `ALERT_EMAIL` cez ten istý SMTP účet ako Jenkins
+(časť SMTP v [inštalácii](instalacia.md)). Jeden e-mail na alert 30 s po
+začiatku, pripomienka každých 12 hodín, kým trvá, a jeden, keď sa vyrieši.
+Alertmanager je na serveri na `127.0.0.1:9093` (cez SSH tunel).
+
+| Alert | Kedy | Čo robiť |
+| --- | --- | --- |
+| `NodeDown` | Prometheus sa 2 minúty nedostane na uzol | `make logs SERVICE=node-1`; ak nepomôže, Actions → Deploy → `restart` |
+| `ServiceDown` | to isté pre indexer alebo generátor | `make logs SERVICE=indexer` (alebo `workload`) |
+| `ChainStalled` | výška žiadneho uzla sa 10 minút nezmenila | uzol neťaží alebo stojí: `make logs SERVICE=node-1`, Grafana → PoUW · Network |
+| `IndexerLagging` | indexer je 5 minút viac ako 10 blokov za uzlom | `make logs SERVICE=indexer`; po reštarte chvíľu dobieha, to je v poriadku |
+| `DiskAlmostFull` | disk servera je 10 minút plný na viac ako 80 % | `docker system df`, cache buildov: `docker compose exec jenkins-docker docker system prune -af` |
+| `ContainerRestarting` | kontajner sa za 15 minút reštartoval viac ako dvakrát | `make logs SERVICE=<kontajner bez pouw- a -1>`; pri `backup` zlyháva záloha |
+
+```bash
+make test-alert    # skúšobný alert celou cestou až po e-mail
+# stíšenie počas plánovanej práce
+docker compose exec alertmanager amtool silence add alertname=NodeDown \
+  --duration=2h --comment="výmena uzla" --alertmanager.url=http://localhost:9093
+```
+
+Nové pravidlo: `monitoring/prometheus/rules/pouw.yml` a k nemu test v
+`monitoring/prometheus/tests/` (prípad, keď alert príde, aj keď nie). `make
+check` testy spustí, Prometheus pravidlá načíta pri každom `make up`.
+
+## Zálohy a obnova
+
+Služba `backup` každú noc o 02:00 UTC uloží dump databázy indexera do
+`~/pouw/pouw-deploy/backups/` (`BACKUP_DIR`), mimo zväzkov Dockeru, a zmaže
+dumpy staršie ako 7 dní. Ak je najnovší starší ako 20 hodín, urobí jeden hneď
+po štarte. Keď dump zlyhá, kontajner skončí, Docker ho dookola reštartuje a
+príde alert `ContainerRestarting`. V databáze sú aj metadata Hasury. Grafana,
+Prometheus ani Jenkins sa nezálohujú: dashboardy a konfigurácia sú v gite,
+metriky sú dočasné.
+
+```bash
+ls -lt backups/        # dumpy, najnovší prvý
+make backup            # dump hneď, napríklad pred rizikovou zmenou
+make restore-test      # skúšobná obnova najnovšieho dumpu
+```
+
+**Skúšobná obnova** (`make restore-test`, iný dump cez `DUMP=pouw-<čas>.dump`)
+obnoví dump do novej databázy `pouw_restore` vedľa živej, vypíše tabuľky s
+počtom riadkov v oboch, overí, že sedia tabuľky, a `pouw_restore` zmaže. Živú
+databázu nemení, spustiť sa dá kedykoľvek. To isté robí každý `make test`, takže
+večerný build spadne, keď sa záloha nedá obnoviť.
+
+**Obnova živej databázy**, napríklad po poškodení zväzku `postgres-data`:
+
+1. Ak zväzok zmizol celý, `make up` najprv vytvorí prázdnu databázu.
+2. Vyber dump: `ls -lt backups/`.
+3. `./scripts/restore.sh --replace pouw-<čas>.dump` a potvrď `yes`. Skript
+   zastaví indexer a Hasuru, zmaže databázu `pouw`, obnoví ju z dumpu (celú
+   alebo nič) a služby znova spustí.
+4. `make ps`: `indexer` a `hasura` sú `(healthy)`. Indexer pokračuje od
+   posledného bloku v dumpe a novšie si stiahne z uzla.
+
+Bez zálohy vie indexer databázu naplniť z uzla aj sám, len to trvá dlhšie:
+
+```bash
+docker compose stop indexer hasura
+docker compose exec postgres dropdb -U pouw --force pouw
+docker compose exec postgres createdb -U pouw pouw
+make up
+```
 
 ## Nasadenie a rollback
 
@@ -111,19 +185,45 @@ voliteľného profilu (`network`, `host-metrics`), ktorá nebeží, sa preskoč�
 služba bez profilu, ktorá nebeží, je chyba. Každá kontrola je jeden test v
 záložke **Tests** v Jenkinse. Večerné nasadenie prebehne, iba ak prejdú všetky.
 
+Smoke testy sa pýtajú iba „beží to a je to prepojené“. Správanie celého
+devnetu testuje `e2e/test_devnet.py` (pytest, výsledky v suite `devnet`):
+uzly majú spoločný genesis a vidia sa, `node-1` ťaží, indexer je menej ako
+5 blokov za uzlom, Hasura vracia najnovší blok uzla, subscription dostane nový
+blok a explorer odpovedá. Test, že všetky tri uzly majú rovnaký tip, je
+označený ako očakávané zlyhanie (`xfail`), kým uzly nevymieňajú bloky
+(pouw-node#86, #90). Keď prejde, značku zmaž.
+
 Ktorý druh testu kam patrí (unit, integračné, smoke, e2e) a ako ich Jenkins
 nájde, popisuje README repozitára `pouw-deploy`, časť *Tests*.
 
-Príklady testov, ktoré dávajú zmysel, keď budú služby hotové:
+Lokálne ich vyskúšaš cez `make dev-test` (postaví služby z tvojich pracovných
+kópií) alebo `make images test IMAGE_TAG=local` (z `main`), potom `make test-down`.
+Proti bežiacej sieti: `./e2e/smoke.sh pouw` a `./e2e/run.sh pouw`.
+
+## Devnet
+
+Sieť na stagingu aj v každej testovacej kópii je devnet s tromi uzlami
+`node-1`, `node-2` a `node-3`. Každý má vlastný zväzok (RocksDB a kľúč uzla).
+`node-1` je bootnode a jediný ťažiar, `node-2` a `node-3` sa naň pripoja
+(`NODE_BOOTNODES`) a cez neho nájdu aj seba navzájom. Indexer a generátor
+čítajú z `node-1`, Prometheus zbiera metriky všetkých troch.
+
+Genesis vytvorí služba `genesis` raz, keď je zväzok `devnet` prázdny: zo
+šablóny `devnet/chainspec.json` (kópia `pouw-node/chainspec/devnet.json`) s
+aktuálnym časom ako `genesis.timestamp`. Plán obtiažnosti sa počíta od tohto
+času, takže reťazec spustený dni po svojom genesis by najprv vyťažil nával
+ľahkých blokov.
+
+**Nový reťazec** (nový genesis, prázdne uzly aj databáza indexera):
 
 ```bash
-check "node produces blocks" node-1 '...'
-check "indexer sees the latest block" indexer '...'
-check "workload submits a task and gets a proof" workload '...'
+./scripts/devnet-reset.sh    # pýta sa, potom make up
 ```
 
-Lokálne ho vyskúšaš cez `make dev-test` (postaví služby z tvojich pracovných
-kópií) alebo `make images test IMAGE_TAG=local` (z `main`), potom `make test-down`.
+Treba ho po zmene `devnet/chainspec.json` (drž ju rovnakú ako v pouw-node) a
+raz po nasadení, ktoré mení genesis: uzol svoju databázu pod iným genesis
+odmietne a indexer prestane synchronizovať reťazec, s ktorým nemá spoločný ani
+genesis. `make seed` do databázy s devnetom nikdy nepúšťaj, z rovnakého dôvodu.
 
 ## Nová služba
 
@@ -187,11 +287,11 @@ docker compose exec jenkins-docker docker system prune -af
 | Príznak | Príčina | Riešenie |
 | --- | --- | --- |
 | `make up`: `Missing in pass: pouw/smtp/...` | SMTP nie je nastavené | v poriadku, ak je to zámer; pozri časť SMTP v [inštalácii](instalacia.md) |
-| Jenkins nenabehne, v `make logs s=jenkins` je `ConfiguratorException` | chybná hodnota v `jenkins/casc` alebo v hesle | oprav YAML alebo heslo; `pass show pouw/github/app-key \| head -1` musí byť `-----BEGIN PRIVATE KEY-----` |
+| Jenkins nenabehne, v `make logs SERVICE=jenkins` je `ConfiguratorException` | chybná hodnota v `jenkins/casc` alebo v hesle | oprav YAML alebo heslo; `pass show pouw/github/app-key \| head -1` musí byť `-----BEGIN PRIVATE KEY-----` |
 | Prihlásenie cez GitHub sa zacyklí alebo zlyhá | callback URL v OAuth App nesedí s `JENKINS_URL` | callback musí byť `https://<host>/securityRealm/finishLogin` |
 | Priečinok PoUW-ZK je prázdny | GitHub App nie je nainštalovaná alebo nemá práva | Install App → All repositories; priečinok → Scan Organization Now |
 | PR nespúšťajú buildy | zlá URL alebo secret webhooku | GitHub App → Advanced → Recent Deliveries ukáže chybu |
-| Bez certifikátu, prehliadač hlási chybu TLS | zatvorené porty 80/443 alebo DNS neukazuje na server | `make logs s=proxy`, zvonka `nc -vz <ip> 443` |
+| Bez certifikátu, prehliadač hlási chybu TLS | zatvorené porty 80/443 alebo DNS neukazuje na server | `make logs SERVICE=proxy`, zvonka `nc -vz <ip> 443` |
 | Večerné nasadenie: `Deploy workflow run not found` | GitHub App nemá Actions: Read and write | nastavenia aplikácie → Permissions, potom potvrď zmenu v inštalácii |
 | Beh Deploy čaká (`Waiting for a runner`) | runner na serveri nebeží | `sudo systemctl status 'actions.runner.*'` na serveri; znova `sudo ./scripts/runner-setup.sh <token>` |
 | Beh Deploy zlyhá na SSH | zlé hodnoty `DEPLOY_*` (host je `127.0.0.1`) alebo chýba riadok v `authorized_keys` | pozri časť 7 v [inštalácii](instalacia.md) |
@@ -202,4 +302,6 @@ docker compose exec jenkins-docker docker system prune -af
 | Lokálny Jenkins: `No rule to make target 'check'` | job vytvorený v UI s vloženým skriptom nemá checkout | používaj job `pouw-deploy` z CasC, job z UI zmaž |
 | Lokálny Jenkins sa nedostane na GitHub | pokazená sieť Docker Desktop | reštartuj Docker Desktop; `docker run --rm curlimages/curl -sI https://github.com` |
 | `make test`: `port is already allocated` | nová služba publikuje port na hostiteľovi | pridaj ju do `compose.test.yml` s `ports: !reset []` |
+| Uzol sa nenaštartuje (exit 1 alebo 2), v logu iný genesis | databáza uzla alebo `devnet/chainspec.json` patrí k inému genesis | `./scripts/devnet-reset.sh`; po zmene šablóny skontroluj, či sa zhoduje s `pouw-node/chainspec/devnet.json` |
+| Indexer: `the node's chain shares no block with the database, not even the genesis` | devnet dostal nový genesis alebo niekto spustil `make seed` | `./scripts/devnet-reset.sh` |
 | `make dev`: `no ../pouw-xxx, skipped`, potom `pull access denied` | repozitár služby nie je naklonovaný vedľa `pouw-deploy` | `.github/scripts/sync-repos.sh` |
