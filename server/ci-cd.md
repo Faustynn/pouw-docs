@@ -47,9 +47,9 @@ bude v `main` po merge.
 
 | Stage | Príkaz | Čo robí |
 | --- | --- | --- |
-| Config check | `make check` | overí `compose.yml` pre všetky profily a konfiguráciu Promethea |
+| Config check | `make check` | overí `compose.yml` pre všetky profily, konfiguráciu Promethea s testami alertov, Alertmanager a `Caddyfile` |
 | Build services | `make images` | naklonuje `main` každej služby a postaví jej obraz; repozitáre bez `Dockerfile` preskočí; commity zapíše do popisu buildu |
-| Network tests | `make test` | z týchto obrazov spustí testovaciu kópiu siete, pustí `e2e/smoke.sh` a potom `e2e/run.sh` každej služby |
+| Devnet tests | `make test` | z týchto obrazov spustí testovaciu kópiu siete (devnet s 3 uzlami a vlastným genesis), pustí `e2e/smoke.sh`, zálohu so skúšobnou obnovou, e2e testy devnetu (`e2e/test_devnet.py`) a potom `e2e/run.sh` každej služby |
 | Deploy to staging | `scripts/staging-deploy.sh` | iba večerný build `main`, pozri nižšie |
 
 Potom v bloku `post`:
@@ -76,7 +76,7 @@ nemá porty na hostiteľovi (`compose.test.yml`), takže sa buildy nebijú.
 Unit testy patria do `tests/` v repozitári služby a bežia v GitHub Actions
 (`ci-ok`). Testy, ktoré potrebujú bežiacu sieť (API, SOAP, spolupráca uzla a
 indexera), patria do priečinka `e2e/` v repozitári služby. Spúšťa ich Jenkins
-v stage Network tests, teda pri každom PR v `pouw-deploy` a večer pred
+v stage Devnet tests, teda pri každom PR v `pouw-deploy` a večer pred
 nasadením na staging.
 
 Bežia na testovacej kópii siete, nie na stagingu. Kópia vznikne z toho istého

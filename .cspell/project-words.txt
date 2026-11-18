@@ -198,3 +198,16 @@ dashboardy
 healthcheck
 naklonované
 naklonovaný
+zlyhaný
+alerty
+Alertmanageri
+Hasury
+Hasuru
+dumpu
+dumpe
+alertov
+alertmi
+devnetu
+devnetom
+pytest
+bootnode

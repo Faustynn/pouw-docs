@@ -143,9 +143,10 @@ do PR a spúšťa workflow Deploy.
 
 ## 5. SMTP (nepovinné)
 
-Jenkins posiela e-maily o zlyhanom večernom builde cez SMTP účet. Túto časť
-môžeš preskočiť, všetko ostatné funguje aj bez nej. `make up` iba upozorní, že
-chýba `pouw/smtp/*`.
+Jenkins (zlyhaný večerný build) a Alertmanager (alerty) posielajú e-maily cez
+jeden SMTP účet. Túto časť môžeš preskočiť, všetko ostatné funguje aj bez nej.
+`make up` iba upozorní, že chýba `pouw/smtp/*`, a alerty sa potom iba zobrazujú
+v Alertmanageri.
 
 Odporúčame samostatný Gmail účet projektu (nie osobný) so zapnutým dvojfázovým
 overením a [heslom aplikácie](https://myaccount.google.com/apppasswords):
@@ -161,10 +162,13 @@ a v `.env`:
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_FROM=pouw.zk.jenkins@gmail.com   # musí to byť ten istý účet
+ALERT_EMAIL=xmeredov@stuba.sk         # komu chodia alerty, viac adries oddeľ čiarkou
 ```
 
 Over, že sa server k nemu dostane: `nc -vz smtp.gmail.com 587`. Osobné
-univerzitné heslo sem nevkladaj.
+univerzitné heslo sem nevkladaj. Po `make up` pošli skúšobný alert:
+`make test-alert`. E-mail príde do minúty a po piatich minútach ďalší, že je
+vyriešený.
 
 ## 6. Konfigurácia a spustenie
 
@@ -177,6 +181,7 @@ SECRETS_DIR=/run/pouw-secrets
 
 JENKINS_HOST=jenkins.147-175-151-18.sslip.io
 GRAFANA_HOST=grafana.147-175-151-18.sslip.io
+EXPLORER_HOST=explorer.147-175-151-18.sslip.io
 JENKINS_URL=https://jenkins.147-175-151-18.sslip.io/
 GRAFANA_URL=https://grafana.147-175-151-18.sslip.io/
 ACME_EMAIL=xmeredov@stuba.sk
@@ -191,13 +196,14 @@ make ps      # všetko Up, jenkins/grafana/prometheus (healthy)
 
 | Premenná | Význam |
 | --- | --- |
-| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží iba databáza a monitoring; Hasura a služby siete pribudnú s profilom `network` |
+| `COMPOSE_PROFILES` | na serveri `jenkins,proxy,host-metrics` (`host-metrics` = node-exporter a cAdvisor); bez profilu beží celá sieť (databáza, Hasura, uzol, indexer, generátor, explorer) a monitoring; profil `network` je pre službu, ktorá ešte nemá obraz v GHCR |
 | `SECRETS_SOURCE`, `SECRETS_DIR` | heslá z `pass`, dešifrované do tmpfs |
-| `JENKINS_HOST`, `GRAFANA_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
+| `JENKINS_HOST`, `GRAFANA_HOST`, `EXPLORER_HOST` | mená, na ktoré proxy odpovedá a pre ktoré získa certifikát |
 | `JENKINS_URL`, `GRAFANA_URL` | verejné adresy; lomka na konci je povinná |
 | `ACME_EMAIL` | účet Let's Encrypt, upozornenia na expirujúce certifikáty |
 | `JENKINS_AUTH` | na serveri `github`, na notebooku `local` (predvolené) |
 | `JENKINS_ADMINS` | GitHub účty s plnými právami v Jenkinse, oddelené čiarkou; ostatní členovia organizácie môžu joby pozerať a spúšťať |
+| `BACKUP_DIR`, `BACKUP_AT` | nepovinné: kam a kedy (UTC) sa každú noc zálohuje databáza indexera; predvolené `./backups` a `02:00` |
 
 `.env` nie je v gite. Neobsahuje heslá, iba nastavenia servera.
 
@@ -261,7 +267,9 @@ pripája na GitHub cez HTTPS a preberá úlohy. Úloha sa potom cez SSH pripojí
 4. Na notebooku ako vlastník organizácie spusti `./setup-pouw-deploy.sh` z
    koreňa pracovného adresára PoUW-ZK. Kontrola z Jenkinsu sa tým stane
    povinnou pre PR v `pouw-deploy`.
-5. Test reštartu (nepovinné, ale raz sa oplatí):
+5. Alerty a zálohy: `make test-alert` (e-mail príde, ak je nastavené SMTP) a
+   `make restore-test` (skúšobná obnova najnovšej zálohy prejde).
+6. Test reštartu (nepovinné, ale raz sa oplatí):
 
    ```bash
    sudo reboot
