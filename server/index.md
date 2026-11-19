@@ -43,6 +43,8 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 | [CI/CD](ci-cd.md) | čo beží pri pull requeste, každý večer a ako sa aktualizuje staging |
 | [Inštalácia servera](instalacia.md) | inštalácia servera od nuly a nastavenie GitHubu |
 | [Prevádzka](prevadzka.md) | nasadenie, rollback, heslá, nová služba alebo test, riešenie problémov |
+| [Demo 30. 11.](demo.md) | poradie dema, checklist a záložný plán |
+| [Ako to funguje (demo)](ako-to-funguje.md) | celý projekt jednoducho: každá časť, cesta transakcie, otázky na deme |
 
 ## Lokálne spustenie
 
