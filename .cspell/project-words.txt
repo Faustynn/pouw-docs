@@ -214,3 +214,11 @@ bootnode
 demom
 dema
 Grafane
+Bitcoine
+hashe
+hashovania
+hashuje
+devnete
+Grafanu
+Prometheu
+dôkazovač

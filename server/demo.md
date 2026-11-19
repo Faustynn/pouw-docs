@@ -7,7 +7,9 @@ nav_order: 4
 # Demo 30. 11.: checklist a záložný plán
 
 Čo ukážeme, v akom poradí a čo robiť, keď niečo nepôjde. Kto čo prezentuje,
-je návrh: tím ho potvrdí na stretnutí pred demom.
+je návrh: tím ho potvrdí na stretnutí pred demom. Ako jednotlivé časti
+fungujú, jednoducho vysvetlené aj s odpoveďami na otázky, je na stránke
+[Ako to funguje (demo)](ako-to-funguje.md).
 
 Adresy stagingu:
 
@@ -22,7 +24,7 @@ Adresy stagingu:
 | # | Čo ukážeme | Kto (návrh) | Čas |
 | --- | --- | --- | --- |
 | 1 | Cieľ projektu a architektúra: uzol, indexer, Hasura, explorer, generátor záťaže | Nazar | 3 min |
-| 2 | Devnet s 3 uzlami: genesis, ťažba v uzle 1, Proof of Useful Work v bloku | Ilia, Oleksandr | 5 min |
+| 2 | Devnet s 3 uzlami: genesis, ťažba v uzle 1, uzly 2 a 3 držia rovnaký vrchol, štruktúra bloku (`txs`, `proof_txs`) | Ilia, Oleksandr | 5 min |
 | 3 | Skutočná transakcia: podpísaná cez `pouw transfer`, odoslaná uzlu, v bloku a v exploreri | Kostiantyn, Vladimir | 4 min |
 | 4 | Explorer: bloky, transakcie, adresy, živé aktualizácie | Yaroslav | 5 min |
 | 5 | Záťažový test: scenár generátora a panely v Grafane počas behu | Nikita, Nazar | 4 min |
@@ -94,7 +96,12 @@ obnovená databáza slúži na ukážku explorera so staršími blokmi.
 
 ## Čo povieme otvorene
 
-- Uzly si zatiaľ nevymieňajú bloky (gossip a počiatočná synchronizácia,
-  pouw-node#86, #90): ťaží len uzol 1, uzly 2 a 3 sú spojené, ale bez blokov.
-- Generátor číta z plného uzla, ľahký uzol ešte nie je v obraze uzla.
+- Uzly na stagingu dokazujú cez *mock* dôkazovač, aby ťažba nebola pomalá.
+  Skutočný Groth16 sa zapína cez `POUW_PROVER=groth16`.
+- Objednávky dôkazov v devnete zatiaľ nikto neposiela, bloky majú
+  `proof_txs` prázdne a obsahujú iba prevody mincí.
+- Implementovaný je zatiaľ jeden dôkazový systém (Groth16) z troch
+  plánovaných ([ADR-0006](../decisions/0006-tri-dokazovacie-systemy.md)).
+- Ľahký uzol je v obraze uzla, ale v devnete ešte nebeží (pouw-node#105),
+  generátor preto číta z uzla 1.
 - Scenáre `steady` a `spike` generátora sú v práci (pouw-workload#48).
