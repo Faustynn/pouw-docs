@@ -222,3 +222,13 @@ devnete
 Grafanu
 Prometheu
 dôkazovač
+hashujú
+blockchainom
+Bitcoinu
+indexery
+Etherea
+reorgu
+dashboardu
+dôkazovačom
+UTXO
+hashovaním

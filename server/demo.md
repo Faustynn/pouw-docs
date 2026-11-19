@@ -6,6 +6,11 @@ nav_order: 4
 
 # Demo 30. 11.: checklist a záložný plán
 
+Na deme ukazujeme vlastný L1 blockchain, ktorý funguje ako Bitcoin: traja
+ťažiari, transakcie, explorer, dashboard, záťaž a nasadenie na server s
+nočnými testami. Dôkazy (Proof of Useful Work) na deme neukazujeme, sú cieľom
+ďalšej fázy (bod 7).
+
 Čo ukážeme, v akom poradí a čo robiť, keď niečo nepôjde. Kto čo prezentuje,
 je návrh: tím ho potvrdí na stretnutí pred demom. Ako jednotlivé časti
 fungujú, jednoducho vysvetlené aj s odpoveďami na otázky, je na stránke
@@ -23,13 +28,13 @@ Adresy stagingu:
 
 | # | Čo ukážeme | Kto (návrh) | Čas |
 | --- | --- | --- | --- |
-| 1 | Cieľ projektu a architektúra: uzol, indexer, Hasura, explorer, generátor záťaže | Nazar | 3 min |
-| 2 | Devnet s 3 uzlami: genesis, ťažba v uzle 1, uzly 2 a 3 držia rovnaký vrchol, štruktúra bloku (`txs`, `proof_txs`) | Ilia, Oleksandr | 5 min |
+| 1 | Cieľ projektu a architektúra: uzly, indexer, Hasura, explorer, dashboard, generátor záťaže | Nazar | 3 min |
+| 2 | Sieť ako Bitcoin: 3 ťažiari súťažia o bloky, uzly držia rovnaký vrchol, uzol po výpadku dobehne ostatné | Ilia, Oleksandr | 5 min |
 | 3 | Skutočná transakcia: podpísaná cez `pouw transfer`, odoslaná uzlu, v bloku a v exploreri | Kostiantyn, Vladimir | 4 min |
-| 4 | Explorer: bloky, transakcie, adresy, živé aktualizácie | Yaroslav | 5 min |
-| 5 | Záťažový test: scenár generátora a panely v Grafane počas behu | Nikita, Nazar | 4 min |
-| 6 | Prevádzka: dashboardy, alerty, zálohy, nočný test celej siete a nasadenie | Nazar | 4 min |
-| 7 | Čo nie je hotové a čo ďalej | všetci | 2 min |
+| 4 | Explorer: posledné bloky, transakcie, adresy, ťažiari, živé aktualizácie | Yaroslav | 5 min |
+| 5 | Záťaž a dashboard: generátor posiela transakcie a čítania (aj cez ľahké uzly), grafy počas behu | Nikita, Nazar | 5 min |
+| 6 | Prevádzka: nasadenie cez Docker, nočné testy v Jenkinse, alerty, zálohy | Nazar | 4 min |
+| 7 | Čo nie je hotové a čo ďalej: Proof of Useful Work | všetci | 2 min |
 
 Pri bode 3 a 5 pomôžu príkazy na serveri v adresári `~/pouw/pouw-deploy`:
 
@@ -55,7 +60,8 @@ n pouw transfer --seed "$(printf '01%.0s' $(seq 32))" --chain-id 1 --nonce "$non
 
 - [ ] Večerný build `main` prešiel a nasadil sa (Jenkins, `deploy-history.log`).
 - [ ] Actions → Deploy → `status`: všetky služby `(healthy)`, verzie z posledného buildu.
-- [ ] Uzol 1 ťaží, výška rastie, indexer je za ním menej ako 5 blokov (Grafana → PoUW · Services).
+- [ ] Všetky 3 uzly ťažia a majú rovnakú výšku (Grafana → PoUW · Network, *Blocks per miner* a *Height per node*), indexer je za nimi menej ako 5 blokov (PoUW · Services).
+- [ ] Generátor posiela transakcie, v exploreri pribúdajú bloky s prevodmi.
 - [ ] Explorer ukazuje skutočné bloky z devnetu, nie ukážkové dáta.
 - [ ] Grafana: dashboardy PoUW · Network, Services, Server a Load test majú dáta, verejné panely v exploreri sa načítajú.
 - [ ] Žiadny alert nie je aktívny (Alertmanager), testovací alert príde e-mailom (`make test-alert`).
@@ -96,12 +102,11 @@ obnovená databáza slúži na ukážku explorera so staršími blokmi.
 
 ## Čo povieme otvorene
 
-- Uzly na stagingu dokazujú cez *mock* dôkazovač, aby ťažba nebola pomalá.
-  Skutočný Groth16 sa zapína cez `POUW_PROVER=groth16`.
-- Objednávky dôkazov v devnete zatiaľ nikto neposiela, bloky majú
-  `proof_txs` prázdne a obsahujú iba prevody mincí.
-- Implementovaný je zatiaľ jeden dôkazový systém (Groth16) z troch
-  plánovaných ([ADR-0006](../decisions/0006-tri-dokazovacie-systemy.md)).
-- Ľahký uzol je v obraze uzla, ale v devnete ešte nebeží (pouw-node#105),
-  generátor preto číta z uzla 1.
-- Scenáre `steady` a `spike` generátora sú v práci (pouw-workload#48).
+- Na deme je sieť ako Bitcoin: ťažba hashovaním hlavičky, prevody mincí.
+  Dôkazy pre klientov (Proof of Useful Work) sú v návrhu a kontraktoch, ale
+  v devnete ich nikto neposiela; bloky majú `proof_txs` prázdne. Uzly
+  bežia s *mock* dôkazovačom, skutočný Groth16 je ďalšia fáza (pouw-node#92).
+- Čo z dema ešte nie je hotové v čase písania (19. 11.): generátor zatiaľ
+  iba číta, transakcie posielať nevie (pouw-workload); ľahký uzol je v obraze
+  uzla, ale v devnete ešte nebeží (pouw-node#105); stránka dashboardu
+  (pouw-dashboard#82). Pred demom tento zoznam aktualizujte.

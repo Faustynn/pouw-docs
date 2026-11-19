@@ -6,33 +6,37 @@ nav_order: 5
 
 # Ako to funguje: jednoducho, pre demo
 
-Táto stránka vysvetľuje celý projekt jednoduchými slovami, presne v tom
-rozsahu, ktorý ukazujeme na deme 30. 11. Je pre toho, kto prezentuje, aj pre
-toho, kto odpovedá na otázky. Poradie ukážok a záložný plán sú v
+Táto stránka vysvetľuje projekt jednoduchými slovami, presne v tom rozsahu,
+ktorý ukazujeme na deme 30. 11. Je pre toho, kto prezentuje, aj pre toho,
+kto odpovedá na otázky. Poradie ukážok a záložný plán sú v
 [Demo 30. 11.](demo.md), podrobnosti v [kontraktoch](../contracts/index.md) a
 v README jednotlivých repozitárov.
 
-## Projekt v troch vetách
+## Čo ukazujeme
 
-V Bitcoine ťažiari počítajú hashe, ktoré okrem zabezpečenia siete nemajú
-žiadny iný úžitok. My staviame vlastný blockchain (L1), v ktorom ťažiar
-okrem hashovania vyrába aj **zero-knowledge dôkazy** pre klientov, ktorí si
-ich objednajú a zaplatia poplatok. Práca ťažiara je teda zároveň užitočná
-(*Proof of Useful Work*), myšlienka vychádza z článku
-[SNARKChain](https://arxiv.org/abs/2510.09729).
+Vlastný **L1 blockchain, ktorý funguje ako Bitcoin**: ťažiari hashujú
+hlavičky blokov a súťažia o odmenu, používatelia si posielajú mince a celá
+sieť sa dá sledovať cez explorer a dashboard. Okolo siete je všetko, čo
+potrebuje skutočný projekt: indexer a API, generátor záťaže, monitoring,
+nasadenie na server cez Docker a nočné testy.
+
+Cieľ projektu ide ďalej: ťažiari majú okrem hashovania vyrábať aj
+zero-knowledge dôkazy pre klientov (*Proof of Useful Work*, podľa článku
+[SNARKChain](https://arxiv.org/abs/2510.09729)). Táto časť je v návrhu a
+kontraktoch, na deme ju neukazujeme (pozri [Čo je hotové](#čo-je-hotové-a-čo-ešte-nie)).
 
 ## Slovník
 
 | Pojem | Jednoducho |
 | --- | --- |
+| L1 | samostatný blockchain s vlastnými uzlami a mincou, nie aplikácia nad iným blockchainom |
 | Blok | balík transakcií s hlavičkou; hlavička má 168 bajtov a ťažiar ju hashuje, kým nenájde dosť „malý“ hash |
 | Transakcia | podpísaný príkaz, napríklad „pošli 1000 mincí z adresy A na adresu B“ |
 | Ťažiar | uzol, ktorý skladá nové bloky a dostáva za ne odmenu |
-| ZK dôkaz | krátky dôkaz, že niekto správne vykonal výpočet; overí sa rýchlo bez opakovania výpočtu |
-| Groth16 | dôkazový systém, ktorý používa SNARKChain aj my |
 | Uzol | program, ktorý drží celý reťazec, overuje bloky a rozpráva sa s ostatnými uzlami |
 | Ľahký uzol | klient bez celého reťazca: má iba hlavičky blokov a pýta sa plných uzlov |
 | Mempool | čakáreň transakcií, ktoré ešte nie sú v bloku |
+| Reorg | dvaja ťažiari našli blok naraz; vyhrá reťazec s väčšou prácou, druhý blok sa zahodí |
 | Devnet | naša testovacia sieť; má vlastný začiatočný blok (genesis) |
 | Indexer | služba, ktorá číta bloky z uzla a ukladá ich do databázy, aby sa dali rýchlo hľadať |
 | Explorer | webová stránka, na ktorej sa dajú prezerať bloky, transakcie a adresy |
@@ -41,40 +45,40 @@ ich objednajú a zaplatia poplatok. Práca ťažiara je teda zároveň užitočn
 
 ```mermaid
 flowchart LR
-    W[Generátor záťaže<br/>pouw-workload] -- čítania --> N1
-    U[pouw transfer<br/>podpísaná transakcia] -- POST /v1/txs --> N1
-    N1[Uzol 1<br/>ťaží] <-- gossip a synchronizácia --> N2[Uzol 2]
-    N1 <-- gossip a synchronizácia --> N3[Uzol 3]
+    W[Generátor záťaže<br/>transakcie a čítania] -- transakcie --> N1
+    W -- čítania --> L[Ľahké uzly]
+    L -- hlavičky --> N1
+    N1[Uzol 1<br/>ťaží] <-- gossip a synchronizácia --> N2[Uzol 2<br/>ťaží]
+    N1 <-- gossip a synchronizácia --> N3[Uzol 3<br/>ťaží]
+    N2 <--> N3
     N1 -- bloky --> I[Indexer]
-    N2 -- udalosti --> I
-    N3 -- udalosti --> I
     I --> P[(PostgreSQL)]
     P --> H[Hasura<br/>GraphQL]
-    H --> E[Explorer<br/>web]
-    P --> G[Grafana]
-    PR[Prometheus] --> G
+    H --> E[Explorer]
+    H --> D[Dashboard]
+    PR[Prometheus] --> G[Grafana]
     N1 -. metriky .-> PR
     W -. metriky .-> PR
 ```
 
-Všetko beží v Dockeri na jednom serveri (staging), presne tak isto sa to dá
+Všetko beží v Dockeri na jednom serveri (staging). Presne tak isto sa to dá
 spustiť aj na notebooku príkazom `make up` v repozitári `pouw-deploy`.
 
 ## Časti projektu
 
 ### Uzol (pouw-node)
 
-**Čo robí:** je srdcom siete. Prijíma transakcie, skladá a overuje bloky,
+**Čo robí:** je srdcom siete. Prijíma transakcie, ťaží a overuje bloky,
 ukladá reťazec a rozpráva sa s ostatnými uzlami.
 
 **Ako to funguje:**
 
-- Napísaný je v Ruste. Blok má hlavičku so 168 bajtmi; ťažiar mení v hlavičke
-  číslo (nonce) a hashuje ju, kým hash nie je pod cieľom (*proof of work*).
-- Blok má okrem prevodov mincí (`txs`) aj miesto na dôkazy (`proof_txs`):
-  dôkaz Groth16 pre požiadavku, ktorú si klient objednal a zaplatil. Každý
-  uzol každý dôkaz v bloku overí, takže ťažiar nemôže podvádzať. V devnete
-  sú `proof_txs` zatiaľ prázdne, pozri [Čo je hotové](#čo-je-hotové-a-čo-ešte-nie).
+- Napísaný je v Ruste. Ako v Bitcoine má blok hlavičku (168 bajtov) a ťažiar
+  v nej mení číslo (nonce) a hashuje ju (SHA-256), kým hash nie je pod
+  cieľom (*proof of work*). Cieľ sa sám prispôsobuje, aby blok vznikol
+  približne každých 10 sekúnd.
+- Na rozdiel od Bitcoinu používame účty (ako Ethereum): každá adresa má
+  zostatok a nonce, transakcia je podpísaná kľúčom Ed25519.
 - Uzly sa navzájom nájdu a posielajú si bloky a transakcie cez libp2p
   (*gossipsub*). Nový uzol alebo uzol po výpadku si chýbajúce bloky stiahne
   sám (*initial block download*): najprv hlavičky, potom telá blokov.
@@ -84,26 +88,26 @@ ukladá reťazec a rozpráva sa s ostatnými uzlami.
 - V tom istom obraze je CLI `pouw` (`keygen` vytvorí adresu, `transfer`
   podpíše transakciu) a ľahký uzol `pouw-light-node`.
 
-**Čo ukážeme:** výšku reťazca, ako uzol 1 ťaží, ako uzly 2 a 3 držia rovnaký
-vrchol reťazca, a skutočnú transakciu.
+### Sieť: traja ťažiari
 
-### Devnet s tromi uzlami
-
-**Čo robí:** je to malá, ale skutočná sieť: tri uzly s rovnakým genesis
-blokom.
+**Čo robí:** je to malá, ale skutočná sieť ako Bitcoin: tri uzly s rovnakým
+genesis blokom a každý z nich ťaží.
 
 **Ako to funguje:**
 
-- Uzol 1 má adresu ťažiara, preto ťaží. Uzly 2 a 3 neťažia; pripoja sa k
-  uzlu 1 (*bootnode*), bloky dostávajú cez gossip a overujú ich.
+- Všetky tri uzly súťažia o každý blok. Kto nájde hash skôr, pošle blok
+  ostatným a dostane odmenu na svoju adresu.
+- Keď dvaja nájdu blok naraz, sieť sa na chvíľu rozdvojí. Vyhrá reťazec s
+  väčšou prácou, druhý blok sa zahodí (*reorg*) a indexer ho prestane
+  zobrazovať.
 - Keď uzol vypadne, po štarte dobehne ostatné sám. Na stagingu sme to
-  vyskúšali naostro: uzol 2 začal s prázdnou databázou a približne 9 000
-  blokov stiahol od uzla 1 za asi 20 sekúnd.
+  vyskúšali naostro: uzol s prázdnou databázou stiahol približne 9 000 blokov
+  za asi 20 sekúnd.
 - Ak sa devnet zasekne, `scripts/devnet-reset.sh` vytvorí nový genesis a
   začne od nuly.
 
-**Čo ukážeme:** v Grafane → PoUW · Network panel *Height per node* a
-*Peers*: všetky tri čiary výšky idú spolu.
+**Čo ukážeme:** v Grafane → PoUW · Network panely *Blocks per miner* (bloky
+nachádzajú všetci traja), *Height per node* (výšky idú spolu) a *Peers*.
 
 ### Cesta jednej transakcie
 
@@ -113,10 +117,10 @@ Toto je bod 3 dema, krok za krokom (príkazy sú v [Demo 30. 11.](demo.md)):
 2. Zistíme aktuálny nonce odosielateľa (poradové číslo jeho transakcií), aby
    sa tá istá transakcia nedala poslať dvakrát.
 3. `pouw transfer` zostaví transakciu (komu, koľko, poplatok, nonce) a
-   podpíše ju kľúčom odosielateľa (Ed25519).
-4. Transakcia ide cez `POST /v1/txs` do uzla 1. Uzol overí podpis, nonce a
-   zostatok a vráti `txid`, čiže hash transakcie.
-5. Transakcia čaká v mempoole, kým ju ťažiar nevloží do ďalšieho bloku.
+   podpíše ju kľúčom odosielateľa.
+4. Transakcia ide cez `POST /v1/txs` do uzla. Uzol overí podpis, nonce a
+   zostatok, vráti `txid` (hash transakcie) a pošle ju ostatným uzlom.
+5. Transakcia čaká v mempoole, kým ju niektorý ťažiar nevloží do bloku.
 6. Indexer si nový blok prečíta z uzla a zapíše ho do databázy.
 7. `txid` vložíme do vyhľadávania v exploreri a uvidíme transakciu v bloku,
    aj nový zostatok oboch adries.
@@ -126,58 +130,66 @@ Toto je bod 3 dema, krok za krokom (príkazy sú v [Demo 30. 11.](demo.md)):
 **Čo robí:** uzol vie odpovedať na jednoduché otázky („daj mi blok číslo
 100“), ale nie na otázky typu „všetky transakcie tejto adresy“ alebo „koľko
 blokov vyťažil každý ťažiar“. Na to indexer prepisuje reťazec do databázy
-PostgreSQL.
+PostgreSQL, ako indexery Bitcoinu alebo Etherea.
 
 **Ako to funguje:**
 
-- Bloky číta z uzla 1, udalosti (napríklad „uzol videl nový blok“ alebo
-  „transakcia bola odmietnutá“) zo všetkých troch uzlov.
+- Sleduje uzol 1: číta nové bloky, zostatky účtov a udalosti zo všetkých
+  troch uzlov (napríklad „uzol videl nový blok“ alebo „transakcia bola
+  odmietnutá“).
 - Pamätá si, kde skončil, takže po reštarte pokračuje a nezačína od nuly.
-- Keď sa reťazec vetví (*reorg*), indexer to rozpozná a bloky, ktoré už
-  neplatia, prestane zobrazovať.
+- Pri reorgu rozpozná, ktoré bloky už neplatia, a označí ich.
 - Raz za minútu počíta štatistiky siete pre Grafanu.
 
 **Čo ukážeme:** v Grafane → PoUW · Services, že indexer je za uzlom menej
 ako pár blokov.
 
-### Explorer a Hasura (pouw-dashboard)
+### Hasura: API pre weby
 
-**Čo robí:** webová stránka, na ktorej sa dá prezerať celá sieť bez
-inštalácie čohokoľvek.
+**Čo robí:** z databázy indexera automaticky robí GraphQL API, ktoré
+používa explorer aj dashboard.
 
 **Ako to funguje:**
 
-- Hasura z databázy automaticky robí GraphQL API. Vidí však iba pripravené
-  pohľady (*views*), nie tabuľky indexera, a dovolí iba čítanie a iba
-  vopred schválené dotazy. Cudzí dotaz dostane odpoveď `query is not allowed`.
-- Web (React) má stránky: prehľad, zoznam blokov a detail bloku,
-  transakcie, dôkazy, obvody (*circuits*), adresy, ťažba a vyhľadávanie.
-- Nové bloky sa zobrazia samé, bez obnovenia stránky (GraphQL
-  *subscriptions*).
-- Na stránke sú vložené aj verejné panely z Grafany.
+- Vidí iba pripravené pohľady (*views*), nie tabuľky indexera, a dovolí iba
+  čítanie a iba vopred schválené dotazy. Cudzí dotaz dostane odpoveď
+  `query is not allowed`.
+- Okrem dotazov vie posielať zmeny naživo (GraphQL *subscriptions* cez
+  WebSocket), takže nový blok sa na webe zobrazí bez obnovenia stránky.
 
-**Čo ukážeme:** prehľad, detail bloku, našu transakciu, adresu ťažiara so
-zostatkom a stránku Ťažba.
+### Explorer a dashboard (pouw-dashboard)
+
+**Čo robí:** dve webové stránky nad tým istým API:
+
+- **Explorer** je ako blockchain.com pre Bitcoin: posledné bloky, detail
+  bloku a transakcie, adresy so zostatkom, ťažiari a vyhľadávanie podľa
+  výšky, hashu, `txid` alebo adresy.
+- **Dashboard** ukazuje stav siete: uzly a ich výšky, ťažiarov, transakcie za
+  sekundu, mempool a panely z Grafany.
+
+**Čo ukážeme:** posledné bloky naživo, detail bloku, našu transakciu, adresu
+ťažiara so zostatkom, stránku Ťažba a dashboard počas záťaže.
 
 ### Generátor záťaže (pouw-workload)
 
-**Čo robí:** hrá úlohu mnohých klientov naraz, aby sme videli, ako sieť
-zvláda záťaž.
+**Čo robí:** hrá úlohu mnohých používateľov naraz: posiela transakcie a
+číta zo siete, aby sme videli, ako sieť zvláda záťaž.
 
 **Ako to funguje:**
 
 - Napísaný je v Jave. Scenár v YAML hovorí, ako dlho, koľko požiadaviek za
-  sekundu a aký mix požiadaviek posielať (vrchol reťazca, hlavička bloku,
+  sekundu a aký mix poslať (prevody mincí, vrchol reťazca, hlavička bloku,
   celý blok, účet).
+- Transakcie posiela do plných uzlov, čítania cez ľahké uzly.
 - Požiadavky posiela podľa plánu bez ohľadu na to, či predchádzajúce už
   dostali odpoveď (*open loop*), takže meria skutočné oneskorenie aj pri
   preťažení.
 - Meria oneskorenie p50, p95 a p99 (medián, 95 % a 99 % požiadaviek bolo
   rýchlejších) a posiela metriky do Prometheu.
-- Scenár `devnet` beží 60 sekúnd, 20 čítaní za sekundu, z uzla 1.
 
 **Čo ukážeme:** na serveri `make load SCENARIO=devnet` a počas behu v
-Grafane → PoUW · Load test grafy *Reads / s*, *p95 latency* a *Errors*.
+Grafane → PoUW · Load test grafy *Reads / s*, *p95 latency* a *Errors*, v
+exploreri bloky plné prevodov.
 
 ### Monitoring (Prometheus, Grafana, Alertmanager)
 
@@ -191,30 +203,37 @@ Grafane → PoUW · Load test grafy *Reads / s*, *p95 latency* a *Errors*.
 
 | Dashboard | Čo na ňom je |
 | --- | --- |
-| PoUW · Network | výška, čas bloku, transakcie a dôkazy, obťažnosť, uzly a ich spojenia, mempool |
+| PoUW · Network | výška, čas bloku, bloky podľa ťažiara, transakcie, obťažnosť, uzly a ich spojenia, mempool |
 | PoUW · Services | či služby bežia, oneskorenie indexera, CPU a pamäť kontajnerov, reštarty |
 | PoUW · Server | CPU, RAM, disk a sieť servera |
-| PoUW · Load test | priebeh záťažového testu: čítania za sekundu, oneskorenie, chyby |
+| PoUW · Load test | priebeh záťažového testu: požiadavky za sekundu, oneskorenie, chyby |
 
 - Alertmanager pošle e-mail, keď napríklad uzol nebeží, reťazec 10 minút
   nerastie alebo je disk skoro plný.
 
-### Server, CI/CD a nasadenie (pouw-deploy)
+### Server, Docker, Jenkins (pouw-deploy)
 
 **Čo robí:** zabezpečuje, aby na stagingu vždy bežala otestovaná verzia.
 
 **Ako to funguje:**
 
-1. Každá zmena ide cez pull request. GitHub Actions spustia lint, testy a
+1. Každá služba má `Dockerfile`. Celá sieť (uzly, indexer, databáza, Hasura,
+   weby, generátor, monitoring, Jenkins) je opísaná v jednom `compose.yml`.
+2. Každá zmena ide cez pull request. GitHub Actions spustia lint, testy a
    kontrolu bezpečnosti; zmena potrebuje zelenú kontrolu `ci-ok` a schválenie
-   iného člena tímu.
-2. Po merge sa z každej služby postaví Docker obraz.
-3. Každý večer Jenkins spustí celú sieť od nuly v oddelenej kópii a pustí
-   testy celej siete (napríklad: majú všetky uzly rovnaký genesis? držia
-   rovnaký vrchol? vidí explorer skutočné bloky?).
-4. Iba keď testy prejdú, otestované verzie sa nasadia na staging. Ak
-   nová verzia nenaštartuje, nasadenie sa samo vráti na predchádzajúcu.
-5. Každú noc o 02:00 UTC sa zálohuje databáza a obnova sa testuje.
+   iného člena tímu. Po merge sa z každej služby postaví Docker obraz.
+3. Každý večer o 21:00 Jenkins spustí celú sieť od nuly v oddelenej kópii a
+   pustí testy jednotlivých častí aj celej siete, napríklad:
+   - majú všetky uzly rovnaký genesis a nájdu sa?
+   - rastie reťazec a držia uzly rovnaký vrchol?
+   - nachádza bloky viac ťažiarov?
+   - stíha indexer uzol a dáva Hasura ten istý blok ako uzol?
+   - príde nový blok cez subscription?
+   - dostane sa skutočná transakcia až do explorera?
+   - dá sa obnoviť nočná záloha?
+4. Iba keď testy prejdú, otestované verzie sa nasadia na staging. Ak nová
+   verzia nenaštartuje, nasadenie sa samo vráti na predchádzajúcu.
+5. Každú noc o 02:00 UTC sa zálohuje databáza.
 
 Server je za proxy Caddy, ktorá sama vybaví HTTPS certifikáty. Zvonka sú
 otvorené iba porty 80 a 443, SSH ide iba cez VPN školy.
@@ -227,30 +246,35 @@ otvorené iba porty 80 a 443, SSH ide iba cez VPN školy.
 
 ## Čo je hotové a čo ešte nie
 
-Hovoríme otvorene, čo je skutočné a čo je zjednodušené:
+Stav k 19. 11., pred demom ho aktualizujte:
 
 | Oblasť | Stav |
 | --- | --- |
-| Uzol, ťažba, transakcie, 3 uzly v sieti | hotové, beží na stagingu |
-| Gossip a synchronizácia uzlov | hotové, uzly držia rovnaký vrchol |
-| Indexer, explorer, monitoring, alerty, zálohy, CI/CD | hotové |
-| Dôkazy v devnete | uzly na stagingu používajú *mock* dôkazovač (dôkaz sa nevyrába naozaj), aby ťažba nebola pomalá; skutočný Groth16 sa zapína nastavením `POUW_PROVER=groth16` |
-| Viac dôkazových systémov | rozhodnuté sú tri ([ADR-0006](../decisions/0006-tri-dokazovacie-systemy.md)), implementovaný je zatiaľ Groth16 |
-| Ľahký uzol | je v obraze uzla, synchronizuje hlavičky, ale v devnete ešte nebeží (pouw-node#105); generátor zatiaľ číta z uzla 1 |
-| Scenáre záťaže | `devnet`, `smoke` a `soak` sú hotové, `steady` a `spike` sú v práci (pouw-workload#48) |
-| Objednávky dôkazov od klientov | formát je v kontraktoch, ale nikto ich v devnete zatiaľ neposiela; bloky na stagingu majú `proof_txs` prázdne a obsahujú iba prevody mincí |
+| Uzol: ťažba, transakcie, gossip, synchronizácia | hotové, beží na stagingu |
+| Traja ťažiari | v pull requeste (pouw-deploy#65) |
+| Indexer, Hasura, explorer | hotové, beží na stagingu |
+| Monitoring, alerty, zálohy, Docker, nočné testy v Jenkinse | hotové |
+| Generátor: čítania a meranie oneskorenia | hotové |
+| Generátor: transakcie | v práci (pouw-workload) |
+| Ľahké uzly v devnete | ľahký uzol je v obraze uzla, v devnete ešte nebeží (pouw-node#105) |
+| Stránka dashboardu | v práci (pouw-dashboard#82); záloha: verejné panely Grafany |
+| Proof of Useful Work (dôkazy v blokoch) | ďalšia fáza: formát je v kontraktoch, uzly zatiaľ bežia s *mock* dôkazovačom a bloky majú `proof_txs` prázdne (pouw-node#92) |
 
 ## Otázky, ktoré môžu prísť
 
-**Prečo nestačí obyčajný proof of work?** Lebo jeho výpočet nemá žiadny iný
-úžitok. U nás tá istá práca ťažiara vyrába dôkazy, za ktoré by klient inak
-platil niekomu inému.
+**Čím sa líši od Bitcoinu?** Na deme takmer ničím, a to je zámer: najprv
+funkčná L1 so všetkým okolo. Rozdiely: účty namiesto UTXO, blok každých 10
+sekúnd a v ďalšej fáze dôkazy pre klientov v blokoch.
 
-**Čo ak ťažiar pošle falošný dôkaz?** Každý uzol každý dôkaz v bloku overí.
-Blok so zlým dôkazom ostatné uzly odmietnu, takže ťažiar príde o odmenu.
+**Kde je Proof of Useful Work?** V návrhu a kontraktoch (formát bloku má
+miesto pre dôkazy). Implementujeme ho v ďalšej fáze nad touto sieťou.
 
-**Prečo práve tri uzly?** Najmenší počet, na ktorom sa dá ukázať, že sa uzly
-nájdu, posielajú si bloky a jeden môže vypadnúť a dobehnúť ostatné.
+**Čo keď dvaja ťažiari nájdu blok naraz?** Na chvíľu existujú dve vetvy.
+Vyhrá tá s väčšou prácou, ostatné uzly sa na ňu prepnú a indexer zahodený
+blok prestane zobrazovať.
+
+**Prečo práve tri uzly?** Najmenší počet, na ktorom sa dá ukázať súťaž
+ťažiarov, šírenie blokov a uzol, ktorý vypadne a dobehne ostatné.
 
 **Odkiaľ explorer berie dáta? Pýta sa priamo uzla?** Nie. Uzol → indexer →
 PostgreSQL → Hasura → explorer. Uzol tak nie je vystavený verejne a explorer
