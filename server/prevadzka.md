@@ -32,7 +32,9 @@ Prometheus vyhodnocuje pravidlá v `monitoring/prometheus/rules/` a Alertmanager
 posiela alerty e-mailom na `ALERT_EMAIL` cez ten istý SMTP účet ako Jenkins
 (časť SMTP v [inštalácii](instalacia.md)). Jeden e-mail na alert 30 s po
 začiatku, pripomienka každých 12 hodín, kým trvá, a jeden, keď sa vyrieši.
-Alertmanager je na serveri na `127.0.0.1:9093` (cez SSH tunel).
+Alertmanager je na <https://alerts.147-175-151-18.sslip.io> s prihlásením
+(`admin`, heslo `pass show pouw/alertmanager/password` na serveri); tam vedú
+aj odkazy v e-mailoch. Na serveri je aj na `127.0.0.1:9093`.
 
 | Alert | Kedy | Čo robiť |
 | --- | --- | --- |

@@ -23,6 +23,7 @@ rozhodnutí v [ADR-0001 až ADR-0005](../decisions/index.md).
 | Jenkins | <https://jenkins.147-175-151-18.sslip.io> | GitHub účet, člen organizácie PoUW-ZK |
 | Grafana | <https://grafana.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/grafana/admin` na serveri; dashboardy v priečinku PoUW; bez prihlásenia iba organizácia Public s vloženými panelmi |
 | Explorer | <https://explorer.147-175-151-18.sslip.io> | bez prihlásenia; GraphQL na `/v1/graphql`, iba na čítanie |
+| Alertmanager | <https://alerts.147-175-151-18.sslip.io> | `admin`, heslo: `pass show pouw/alertmanager/password` na serveri |
 
 ## Ako to do seba zapadá
 
