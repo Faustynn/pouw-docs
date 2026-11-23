@@ -22,7 +22,8 @@ Terms used below:
 
 - **Event log**: an append-only list of events kept by one node.
 - **Sequence number** (`seq`): a `u64` the node gives to each event. It
-  starts at 1 and grows by 1.
+  grows by 1. A run of the node starts above every `seq` of its earlier runs
+  (see [Node restart](#node-restart)).
 - **Cursor**: the last `seq` the indexer has processed. The next request
   asks for events after it.
 - **Long-poll**: a request that the node holds open until there is a new
@@ -61,7 +62,9 @@ A value above the maximum is lowered to the maximum. The response is:
 ### Ordering
 
 - `seq` is strictly increasing per node.
-- There are no gaps: the events of one node are exactly `1, 2, 3, ...`.
+- There are no gaps within one run of the node: its events are exactly
+  `b + 1, b + 2, b + 3, ...`, where `b` is the start of the run. Between two
+  runs there is a gap (see [Node restart](#node-restart)).
 - There are no duplicates: one `seq` is one event, and a response never
   repeats an event the same request already returned.
 - Events from different nodes have no common order. Each node has its own
@@ -92,9 +95,24 @@ because events are observations.
 
 The indexer stores the last processed `seq` for each `node_id`, in the same
 Postgres transaction that stores the events. After a restart it reads that
-value and sends it as `after`. A node restart does not reset `seq`: the node
-persists the log, so the cursor stays valid. The first event after a start
-is `node_started`.
+value and sends it as `after`.
+
+### Node restart
+
+The node keeps its event log in memory, so the events of a run that the
+indexer has not read yet are lost when the node stops. The numbering is not
+reset: a run starts at `b`, the microseconds since the Unix epoch at its start
+(about 1.8 × 10¹⁵ in 2026, below 2⁵³, so the number is exact in JSON). An
+earlier run, with the same data or after the data was wiped, used fewer
+numbers than microseconds passed, so every `seq` of the new run is above
+every `seq` of the earlier one. The first event of a run is `node_started`.
+
+For the indexer a node restart is the case of
+[Retention and resync](#retention-and-resync): its cursor from the earlier run
+is older than the oldest event, the node answers HTTP 410 with `oldest_seq`
+= `b + 1`, the indexer records the gap and continues from there. Before
+pouw-node#142 a run started at 0, and an indexer with a cursor from the
+earlier run waited for numbers that came only after as many events again.
 
 ### Why pull
 
